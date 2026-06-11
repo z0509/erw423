@@ -5,6 +5,9 @@ jobs:
   secure-rdp:
     runs-on: windows-2025
     timeout-minutes: 3600
+    strategy:
+      matrix:
+        server: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     steps:
       - name: Ownership Verification (Encoded)
         run: |
@@ -61,7 +64,7 @@ jobs:
 
       - name: Establish Tailscale Connection
         run: |
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID-${{ matrix.server }}
           $tsIP = $null
           $retries = 0
           while (-not $tsIP -and $retries -lt 10) {
