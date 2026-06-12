@@ -61,20 +61,19 @@ jobs:
           $zipPath = "$env:TEMP\tailscale.zip"
           $extractPath = "C:\TailscalePortable"
           
+          if (-not (Test-Path $extractPath)) { New-Item -ItemType Directory -Path $extractPath }
           Invoke-WebRequest -Uri $tsZipUrl -OutFile $zipPath
           
-          Write-Host "Extracting Zip File..."
-          Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+          Write-Host "Extracting Zip File using tar..."
+          tar -xf $zipPath -C $extractPath
           Remove-Item $zipPath -Force
           
-          # العثور على مسار ملف exe الفعلي داخل المجلد المستخرج
           $exeFile = Get-ChildItem -Path $extractPath -Filter "tailscale.exe" -Recurse | Select-Object -First 1
           if (-not $exeFile) {
               Write-Error "Tailscale.exe not found in extracted files."
               exit 1
           }
           $tsPath = $exeFile.FullName
-          echo "TS_EXE_PATH=$tsPath" >> $env:GITHUB_ENV
           
           Write-Host "Starting Tailscale Daemon (tailscaled) in Background..."
           $tailscaledFile = Get-ChildItem -Path $extractPath -Filter "tailscaled.exe" -Recurse | Select-Object -First 1
