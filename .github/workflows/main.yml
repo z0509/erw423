@@ -54,22 +54,26 @@ jobs:
               exit 1
           }
 
-      - name: Install Tailscale
+      - name: Install and Connect Tailscale
         run: |
-          $tsUrl = "https://tailscale.com"
-          $installerPath = "$env:TEMP\tailscale.msi"
-          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
-          Remove-Item $installerPath -Force
+          Write-Host "Installing Tailscale via Windows Package Manager..."
+          winget install Tailscale.Tailscale --silent --accept-source-agreements --accept-package-agreements
+          
+          # إعطاء النظام مهلة قصيرة للتثبيت وتحديث المسارات
           Start-Sleep -Seconds 15
-
-      - name: Establish Tailscale Connection
-        run: |
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=tskey-auth-kdo6rTZUhZ11CNTRL-fYjtg3XE58MVxL4WktbA8MMYfhS2jsaA7 --hostname=gh-runner-$env:GITHUB_RUN_ID-${{ matrix.server }}
+          
+          $tsPath = "C:\Program Files\Tailscale\tailscale.exe"
+          if (-not (Test-Path $tsPath)) {
+              $tsPath = "C:\Program Files (x86)\Tailscale\tailscale.exe"
+          }
+          
+          Write-Host "Connecting to Tailscale Network..."
+          & $tsPath up --authkey=tskey-auth-kdo6rTZUhZ11CNTRL-fYjtg3XE58MVxL4WktbA8MMYfhS2jsaA7 --hostname=gh-runner-$env:GITHUB_RUN_ID-${{ matrix.server }}
+          
           $tsIP = $null
           $retries = 0
-          while (-not $tsIP -and $retries -lt 10) {
-              $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+          while (-not $tsIP -and $retries -lt 15) {
+              $tsIP = & $tsPath ip -4
               Start-Sleep -Seconds 5
               $retries++
           }
@@ -78,6 +82,7 @@ jobs:
               exit 1
           }
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+          echo "TS_EXE_PATH=$tsPath" >> $env:GITHUB_ENV
 
       - name: Verify RDP Accessibility
         run: |
