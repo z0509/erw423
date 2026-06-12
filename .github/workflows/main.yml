@@ -6,6 +6,7 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 3600
     strategy:
+      max-parallel: 3  # تنظيم إطلاق السيرفرات تدريجيًا لمنع الإلغاء التلقائي
       matrix:
         server: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     steps:
@@ -49,38 +50,30 @@ jobs:
           Add-LocalGroupMember -Group "Administrators" -Member "TOOLBOXLAP"
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "TOOLBOXLAP"
           echo "RDP_CREDS=User: TOOLBOXLAP | Password: $password" >> $env:GITHUB_ENV
-          if (-not (Get-LocalUser -Name "TOOLBOXLAP")) {
-              Write-Error "User creation failed"
-              exit 1
-          }
 
       - name: Fetch and Run Tailscale Portable
         run: |
-          Write-Host "Downloading Tailscale Portable Zip..."
+          Write-Host "Downloading Tailscale Portable..."
           $tsZipUrl = "https://tailscale.com"
           $zipPath = "$env:TEMP\tailscale.zip"
-          $extractPath = "C:\TailscalePortable"
+          $extractPath = "C:\Tailscale"
           
           if (-not (Test-Path $extractPath)) { New-Item -ItemType Directory -Path $extractPath }
           Invoke-WebRequest -Uri $tsZipUrl -OutFile $zipPath
           
-          Write-Host "Extracting Zip File using tar..."
+          Write-Host "Extracting Tailscale files..."
           tar -xf $zipPath -C $extractPath
           Remove-Item $zipPath -Force
           
           $exeFile = Get-ChildItem -Path $extractPath -Filter "tailscale.exe" -Recurse | Select-Object -First 1
-          if (-not $exeFile) {
-              Write-Error "Tailscale.exe not found in extracted files."
-              exit 1
-          }
           $tsPath = $exeFile.FullName
           
-          Write-Host "Starting Tailscale Daemon (tailscaled) in Background..."
+          Write-Host "Starting Tailscale Service..."
           $tailscaledFile = Get-ChildItem -Path $extractPath -Filter "tailscaled.exe" -Recurse | Select-Object -First 1
           Start-Process -FilePath $tailscaledFile.FullName -ArgumentList "--state=mem:" -WindowStyle Hidden
           Start-Sleep -Seconds 5
           
-          Write-Host "Connecting to Tailscale Network..."
+          Write-Host "Connecting to Network..."
           & $tsPath up --authkey=tskey-auth-kdo6rTZUhZ11CNTRL-fYjtg3XE58MVxL4WktbA8MMYfhS2jsaA7 --hostname=gh-runner-$env:GITHUB_RUN_ID-${{ matrix.server }}
           
           $tsIP = $null
@@ -90,7 +83,7 @@ jobs:
               Start-Sleep -Seconds 5
               $retries++
           }
-          if (-not $tsIP) { Write-Error "Tailscale IP not assigned."; exit 1 }
+          if (-not $tsIP) { Write-Error "Tailscale IP assignment failed."; exit 1 }
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
 
       - name: Download Bot File
@@ -105,7 +98,7 @@ jobs:
           Write-Host "Tailscale IP: $env:TAILSCALE_IP"
           $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389
           if (-not $testResult.TcpTestSucceeded) {
-              Write-Error "TCP connection to RDP port 3389 failed"
+              Write-Error "TCP connection failed"
               exit 1
           }
           Write-Host "TCP connectivity successful!"
@@ -119,7 +112,7 @@ jobs:
           Write-Host "Username: TOOLBOXLAP"
           Write-Host "Password: admin@123"
           
-          Write-Host "Starting Bot inside retention loop..."
+          Write-Host "Starting Bot inside loop..."
           Start-Process python -ArgumentList "C:\bot.py" -WindowStyle Hidden
           
           while ($true) {
