@@ -56,19 +56,38 @@ jobs:
 
       - name: Install and Connect Tailscale
         run: |
-          Write-Host "Downloading Tailscale Installer..."
-          $tsUrl = "https://tailscale.com"
+          Write-Host "Downloading Tailscale Portable..."
+          $tsZipUrl = "https://tailscale.com"
           $installerPath = "$env:TEMP\tailscale.msi"
-          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
+          Invoke-WebRequest -Uri $tsZipUrl -OutFile $installerPath
           
-          Write-Host "Installing Tailscale MSI..."
-          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
+          Write-Host "Extracting and Installing Tailscale..."
+          # استخدام خيار تثبيت إجباري مع إجبار المعالج على إرجاع النتيجة فوراً
+          $proc = Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -PassThru -Wait
+          if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
+              Write-Warning "MSI installer returned code $($proc.ExitCode)"
+          }
           Remove-Item $installerPath -Force
-          Start-Sleep -Seconds 20
           
+          # حلقة فحص ذكية للتأكد من وجود الملف البرمجي قبل الانتقال للخطوة التالية
           $tsPath = "C:\Program Files\Tailscale\tailscale.exe"
-          if (-not (Test-Path $tsPath)) { $tsPath = "C:\Program Files (x86)\Tailscale\tailscale.exe" }
+          $timeout = 0
+          while (-not (Test-Path $tsPath) -and $timeout -lt 12) {
+              Write-Host "Waiting for Tailscale executable to appear in Path..."
+              if (Test-Path "C:\Program Files (x86)\Tailscale\tailscale.exe") {
+                  $tsPath = "C:\Program Files (x86)\Tailscale\tailscale.exe"
+                  break
+              }
+              Start-Sleep -Seconds 5
+              $timeout++
+          }
           
+          if (-not (Test-Path $tsPath)) {
+              Write-Error "Tailscale installation timed out. Executable not found."
+              exit 1
+          }
+          
+          Write-Host "Found Tailscale at: $tsPath"
           & $tsPath up --authkey=tskey-auth-kdo6rTZUhZ11CNTRL-fYjtg3XE58MVxL4WktbA8MMYfhS2jsaA7 --hostname=gh-runner-$env:GITHUB_RUN_ID-${{ matrix.server }}
           
           $tsIP = $null
