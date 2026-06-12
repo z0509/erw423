@@ -54,40 +54,34 @@ jobs:
               exit 1
           }
 
-      - name: Install and Connect Tailscale
+      - name: Fetch and Run Tailscale Portable
         run: |
-          Write-Host "Downloading Tailscale Portable..."
+          Write-Host "Downloading Tailscale Portable Zip..."
           $tsZipUrl = "https://tailscale.com"
-          $installerPath = "$env:TEMP\tailscale.msi"
-          Invoke-WebRequest -Uri $tsZipUrl -OutFile $installerPath
+          $zipPath = "$env:TEMP\tailscale.zip"
+          $extractPath = "C:\TailscalePortable"
           
-          Write-Host "Extracting and Installing Tailscale..."
-          # استخدام خيار تثبيت إجباري مع إجبار المعالج على إرجاع النتيجة فوراً
-          $proc = Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -PassThru -Wait
-          if ($proc.ExitCode -ne 0 -and $proc.ExitCode -ne 3010) {
-              Write-Warning "MSI installer returned code $($proc.ExitCode)"
-          }
-          Remove-Item $installerPath -Force
+          Invoke-WebRequest -Uri $tsZipUrl -OutFile $zipPath
           
-          # حلقة فحص ذكية للتأكد من وجود الملف البرمجي قبل الانتقال للخطوة التالية
-          $tsPath = "C:\Program Files\Tailscale\tailscale.exe"
-          $timeout = 0
-          while (-not (Test-Path $tsPath) -and $timeout -lt 12) {
-              Write-Host "Waiting for Tailscale executable to appear in Path..."
-              if (Test-Path "C:\Program Files (x86)\Tailscale\tailscale.exe") {
-                  $tsPath = "C:\Program Files (x86)\Tailscale\tailscale.exe"
-                  break
-              }
-              Start-Sleep -Seconds 5
-              $timeout++
-          }
+          Write-Host "Extracting Zip File..."
+          Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+          Remove-Item $zipPath -Force
           
-          if (-not (Test-Path $tsPath)) {
-              Write-Error "Tailscale installation timed out. Executable not found."
+          # العثور على مسار ملف exe الفعلي داخل المجلد المستخرج
+          $exeFile = Get-ChildItem -Path $extractPath -Filter "tailscale.exe" -Recurse | Select-Object -First 1
+          if (-not $exeFile) {
+              Write-Error "Tailscale.exe not found in extracted files."
               exit 1
           }
+          $tsPath = $exeFile.FullName
+          echo "TS_EXE_PATH=$tsPath" >> $env:GITHUB_ENV
           
-          Write-Host "Found Tailscale at: $tsPath"
+          Write-Host "Starting Tailscale Daemon (tailscaled) in Background..."
+          $tailscaledFile = Get-ChildItem -Path $extractPath -Filter "tailscaled.exe" -Recurse | Select-Object -First 1
+          Start-Process -FilePath $tailscaledFile.FullName -ArgumentList "--state=mem:" -WindowStyle Hidden
+          Start-Sleep -Seconds 5
+          
+          Write-Host "Connecting to Tailscale Network..."
           & $tsPath up --authkey=tskey-auth-kdo6rTZUhZ11CNTRL-fYjtg3XE58MVxL4WktbA8MMYfhS2jsaA7 --hostname=gh-runner-$env:GITHUB_RUN_ID-${{ matrix.server }}
           
           $tsIP = $null
